@@ -1,0 +1,319 @@
+#pragma once
+
+#include "../httpserver/new_http.h"
+#include "../cmnds/cmd_public.h"
+
+void DRV_DGR_Init();
+void DRV_DGR_RunQuickTick();
+void DRV_DGR_RunEverySecond();
+void DRV_DGR_Shutdown();
+void DRV_DGR_OnChannelChanged(int ch, int value);
+void DRV_DGR_AppendInformationToHTTPIndexPage(http_request_t *request, int bPreState);
+
+void DRV_DDP_Init();
+void DRV_DDP_RunFrame();
+void DRV_DDP_Shutdown();
+void DRV_DDP_AppendInformationToHTTPIndexPage(http_request_t *request, int bPreState);
+
+void DRV_Shutters_RunQuickTick();
+void DRV_Shutters_RunEverySecond();
+void DRV_Shutters_AddToHtmlPage(http_request_t *request, int bPreState);
+void DRV_Shutters_Init();
+void DRV_Shutters_DoDiscovery(const char *topic);
+
+void BMP280_Init();
+void BMP280_OnEverySecond();
+void BMP280_AppendInformationToHTTPIndexPage(http_request_t *request, int bPreState);
+
+void DoorDeepSleep_Init();
+void DoorDeepSleep_OnEverySecond();
+void DoorDeepSleep_StopDriver();
+void DoorDeepSleep_AppendInformationToHTTPIndexPage(http_request_t *request, int bPreState);
+void DoorDeepSleep_OnChannelChanged(int ch, int value);
+
+void DRV_MAX72XX_Clock_OnEverySecond();
+void DRV_MAX72XX_Clock_RunFrame();
+void DRV_MAX72XX_Clock_Init();
+
+void SSD1306_DRV_Init();
+void SSD1306_OnEverySecond();
+
+void DRV_ADCButton_Init();
+void DRV_ADCButton_RunFrame();
+
+void PT6523_Init();
+void PT6523_RunFrame();
+void PT6523_DrawString(char gk[], int startOfs);
+void PT6523_ClearString();
+
+void TS_RunQuickTick();
+void TS_Init();
+
+float GetRGBCW(float *ar, int index);
+
+void SM2135_Init();
+
+void SM2235_Init();
+
+void BP5758D_Init();
+
+void BP1658CJ_Init();
+
+void KP18058_Init();
+
+void SM15155E_Init();
+
+void DRV_GosundSW2_Init();
+void DRV_GosundSW2_RunFrame();
+
+
+void DRV_PinMutex_Init();
+void DRV_PinMutex_RunFrame();
+
+void MultiPinI2CScanner_Init();
+void MultiPinI2CScanner_RunFrame();
+void MultiPinI2CScanner_AppendInformationToHTTPIndexPage(http_request_t *request, int bPreState);
+
+void SM16703P_Init();
+void SM16703P_Shutdown();
+// set RGBCW values - Cold and Warm White are optional and might be ignored if hardware does not support them, or if
+// channel order does not include them.
+// default is RGB, so C and W are ignored by default - needs to be enabled with something like 'SM16703P_Init 20 RGBCW'
+void Strip_setPixel(int pixel, int r, int g, int b, int c, int w);
+void Strip_setPixelWithBrig(int pixel, int r, int g, int b, int c, int w);
+void Strip_setAllPixels(int r, int g, int b, int c, int w);
+void Strip_scaleAllPixels(int scale);
+void Strip_setMultiplePixel(uint32_t pixel, uint8_t* data, bool push);
+void SM16703P_Show();
+void SM15155E_Init();
+void SM15155E_Write(float *rgbcw);
+void Strip_Apply();
+bool Strip_IsActive();
+extern uint32_t pixel_count;
+
+void TM1637_Init();
+
+void GN6932_Init();
+
+void TM1638_Init();
+
+void HT16K33_Init();
+
+void HD2015_Init();
+
+void DRV_IR2_Init();
+
+void DRV_ADCSmoother_Init();
+void DRV_ADCSmoother_RunFrame();
+
+bool DRV_IsRunning(const char *name);
+
+// this is exposed here only for debug tool with automatic testing
+void DGR_ProcessIncomingPacket(char *msgbuf, int nbytes);
+void DGR_SpoofNextDGRPacketSource(const char *ipStrs);
+
+void TuyaMCU_Sensor_RunEverySecond();
+void TuyaMCU_Sensor_Init();
+
+void DRV_Test_Charts_AddToHtmlPage(http_request_t *request, int bPreState);
+
+void DRV_Charts_AddToHtmlPage(http_request_t *request, int bPreState);
+void DRV_Charts_Init();
+
+void DRV_Toggler_ProcessChanges(http_request_t *request);
+void DRV_Toggler_AddToHtmlPage(http_request_t *request);
+void DRV_Toggler_AppendInformationToHTTPIndexPage(http_request_t *request, int bPreState);
+void DRV_Toggler_QuickTick();
+void DRV_InitPWMToggler();
+
+void DRV_Widget_AddToHtmlPage(http_request_t *request, int bPreState);
+void DRV_Widget_Init();
+
+void DRV_OpenWeatherMap_Init();
+void OWM_AppendInformationToHTTPIndexPage(http_request_t *request, int bPreState);
+
+void DRV_HTTPButtons_ProcessChanges(http_request_t *request);
+void DRV_HTTPButtons_AddToHtmlPage(http_request_t *request);
+void DRV_InitHTTPButtons();
+
+void CHT83XX_Init();
+void CHT83XX_OnEverySecond();
+void CHT83XX_AppendInformationToHTTPIndexPage(http_request_t *request, int bPreState);
+
+void SHT3X_Init();
+void SHT3X_AppendInformationToHTTPIndexPage(http_request_t *request, int bPreState);
+void SHT3X_OnEverySecond();
+void SHT3X_StopDriver();
+
+void AHT2X_Init();
+void AHT2X_AppendInformationToHTTPIndexPage(http_request_t *request, int bPreState);
+void AHT2X_OnEverySecond();
+void AHT2X_StopDriver();
+
+void BMPI2C_Init();
+void BMPI2C_AppendInformationToHTTPIndexPage(http_request_t *request, int bPreState);
+void BMPI2C_OnEverySecond();
+
+void SGP_Init();
+void SGP_AppendInformationToHTTPIndexPage(http_request_t *request, int bPreState);
+void SGP_OnEverySecond();
+void SGP_StopDriver();
+
+void Batt_Init();
+void Batt_OnEverySecond();
+void Batt_AppendInformationToHTTPIndexPage(http_request_t *request, int bPreState);
+void Batt_StopDriver();
+
+void BKPartitions_Init();
+void BKPartitions_QuickFrame();
+ 
+void Shift_Init();
+void Shift_OnEverySecond();
+void Shift_OnChannelChanged(int ch, int value);
+
+void PIR_Init();
+void PIR_OnEverySecond();
+void PIR_OnChannelChanged(int ch, int value);
+void PIR_AppendInformationToHTTPIndexPage(http_request_t *request, int bPreState);
+
+void TMGN_RunQuickTick();
+
+void DRV_MAX72XX_Init();
+void DRV_MAX72XX_Shutdown();
+int MAX72XXSingle_CountPixels(bool bOn);
+int MAX72XXSingle_GetScrollCount();
+
+void EEPROM_Init();
+void EEPROM_OnEverySecond();
+void EEPROM_AppendInformationToHTTPIndexPage(http_request_t*r, int pre);
+
+void apply_smart_light();
+
+void WEMO_Init();
+void WEMO_AppendInformationToHTTPIndexPage(http_request_t *request, int bPreState);
+
+void HUE_Init();
+void HUE_AppendInformationToHTTPIndexPage(http_request_t *request, int bPreState);
+
+void MCP9808_Init();
+void MCP9808_OnEverySecond();
+void MCP9808_AppendInformationToHTTPIndexPage(http_request_t *request, int bPreState);
+
+void ChargingLimit_Init();
+void ChargingLimit_OnEverySecond();
+void ChargingLimit_AppendInformationToHTTPIndexPage(http_request_t *request, int bPreState);
+
+void RN8209_Init(void);
+void RN8029_RunEverySecond(void);
+
+void MAX6675_Init(void);
+void MAX6675_RunEverySecond(void);
+
+void MAX31855_Init();
+void MAX31855_RunEverySecond();
+
+void TCA9554_Init();
+void TCA9554_OnEverySecond();
+void TCA9554_OnChannelChanged(int ch, int value);
+
+void DMX_Init();
+void DMX_OnEverySecond();
+void DMX_Shutdown();
+
+void PWMG_Init();
+
+void Freeze_Init();
+void Freeze_OnEverySecond();
+void Freeze_RunFrame();
+
+void DRV_InitFlashMemoryTestFunctions();
+
+void PixelAnim_Init();
+void PixelAnim_SetAnimQuickTick();
+void PixelAnim_SetAnim(int j);
+void PixelAnim_CreatePanel(http_request_t* request);
+
+typedef struct ledAnim_s
+{
+	const char* name;
+	void(*runFunc)();
+} ledAnim_t;
+extern ledAnim_t g_anims[];
+extern int g_numAnims;
+extern int activeAnim;
+
+void Drawers_Init();
+void Drawers_QuickTick();
+
+void HGS02_Init(void);
+void HGS02_RunEverySecond(void);
+
+void UART_TCP_Init(void);
+void UART_TCP_Deinit(void);
+
+void CSE7761_Init(void);
+void CSE7761_RunEverySecond(void);
+
+void TCL_Init(void);
+void TCL_UART_RunEverySecond(void);
+void TCL_AppendInformationToHTTPIndexPage(http_request_t *request, int bPreState);
+void TCL_DoDiscovery(const char *topic);
+
+void DRV_DDPSend_Init();
+void DRV_DDPSend_Shutdown();
+void DRV_DDPSend_RunFrame();
+void DRV_DDPSend_AppendInformationToHTTPIndexPage(http_request_t* request, int bPreState);
+
+void TXW_Cam_Init(void);
+void TXW_Cam_RunEverySecond(void);
+
+#define SM2135_DELAY 4
+
+// Software I2C
+typedef struct softI2C_s
+{
+	short pin_clk;
+	short pin_data;
+	// I really have to place it here for a GN6932 driver, which is an SPI version of TM1637
+	short pin_stb;
+	// I must somehow be able to tell which proto we have?
+	// short protocolType;
+	byte address8bit;
+} softI2C_t;
+
+void Soft_I2C_SetLow(uint8_t pin);
+void Soft_I2C_SetHigh(uint8_t pin);
+bool Soft_I2C_PreInit(softI2C_t *i2c);
+bool Soft_I2C_WriteByte(softI2C_t *i2c, uint8_t value);
+bool Soft_I2C_Start(softI2C_t *i2c, uint8_t addr);
+void Soft_I2C_Start_Internal(softI2C_t *i2c);
+void Soft_I2C_Stop(softI2C_t *i2c);
+uint8_t Soft_I2C_ReadByte(softI2C_t *i2c, bool nack);
+void Soft_I2C_ReadBytes(softI2C_t *i2c, uint8_t *buf, int numOfBytes);
+
+// Shared LED driver
+commandResult_t CMD_LEDDriver_Map(const void *context, const char *cmd, const char *args, int flags);
+commandResult_t CMD_LEDDriver_WriteRGBCW(const void *context, const char *cmd, const char *args, int flags);
+void LED_I2CDriver_WriteRGBCW(float *finalRGBCW);
+
+/* Bridge driver *********************************************/
+void Bridge_driver_Init();
+void Bridge_driver_DeInit();
+void Bridge_driver_QuickFrame();
+void Bridge_driver_OnChannelChanged(int ch, int value);
+/*************************************************************/
+
+/* Roomba driver *********************************************/
+void Roomba_AppendInformationToHTTPIndexPage(http_request_t *request, int bPreState);
+/*************************************************************/
+void LTR_Init();
+void LTR_OnEverySecond();
+void LTR_AppendInformationToHTTPIndexPage(http_request_t* request, int bPreState);
+
+void TinyIR_NEC_Init();
+void TinyIR_NEC_Deinit();
+void TinyIR_NEC_RunFrame();
+
+void DRV_ESPHome_API_Init();
+void DRV_ESPHome_API_Deinit();
+void DRV_ESPHome_API_OnEverySecond();
