@@ -347,7 +347,7 @@ void OBK_SetClimate(climateMode_e climate_mode)
 
 	if (climate_mode == CLIMATE_MODE_OFF) {
 		g_heat_cool_mode = false;
-		HAL_FlashVars_SaveChannel(TCL_FLASH_CH_HEAT_COOL_MODE, 0);
+		HAL_FlashVars_SaveChannel(TCL_FLASH_CH_HEAT_COOL_MODE, 1000);
 		get_cmd_resp_t get_cmd_resp = { 0 };
 		memcpy(get_cmd_resp.raw, m_get_cmd_resp.raw, sizeof(get_cmd_resp.raw));
 		get_cmd_resp.data.power = 0x00;
@@ -358,7 +358,7 @@ void OBK_SetClimate(climateMode_e climate_mode)
 
 	if (climate_mode == CLIMATE_MODE_FAN_ONLY) {
 		g_heat_cool_mode = false;
-		HAL_FlashVars_SaveChannel(TCL_FLASH_CH_HEAT_COOL_MODE, 0);
+		HAL_FlashVars_SaveChannel(TCL_FLASH_CH_HEAT_COOL_MODE, 1000);
 		get_cmd_resp_t get_cmd_resp = { 0 };
 		memcpy(get_cmd_resp.raw, m_get_cmd_resp.raw, sizeof(get_cmd_resp.raw));
 		get_cmd_resp.data.power = 0x01;
@@ -370,7 +370,7 @@ void OBK_SetClimate(climateMode_e climate_mode)
 
 	// Everything else (including heat_cool) enters dual-setpoint mode
 	g_heat_cool_mode = true;
-	HAL_FlashVars_SaveChannel(TCL_FLASH_CH_HEAT_COOL_MODE, 1);
+	HAL_FlashVars_SaveChannel(TCL_FLASH_CH_HEAT_COOL_MODE, 1001);
 	g_mode = CLIMATE_MODE_HEAT_COOL;
 	TCL_ApplyHeatCoolLogic();
 }
@@ -859,7 +859,7 @@ static commandResult_t CMD_TargetTempLow(const void* context, const char* cmd, c
 	if (val > 45.0f) val = (val - 32.0f) * 5.0f / 9.0f;
 	g_heat_cool_low = val;
 	ADDLOG_WARN(LOG_FEATURE_ENERGYMETER, "TargetTempLow set to %.1f C", g_heat_cool_low);
-	HAL_FlashVars_SaveChannel(TCL_FLASH_CH_HEAT_COOL_LOW, (int)(g_heat_cool_low * 2.0f));
+	HAL_FlashVars_SaveChannel(TCL_FLASH_CH_HEAT_COOL_LOW, (int)(g_heat_cool_low * 2.0f) + 1000);
 	if (g_heat_cool_mode) {
 		TCL_ApplyHeatCoolLogic();
 	}
@@ -871,7 +871,7 @@ static commandResult_t CMD_TargetTempHigh(const void* context, const char* cmd, 
 	if (val > 45.0f) val = (val - 32.0f) * 5.0f / 9.0f;
 	g_heat_cool_high = val;
 	ADDLOG_WARN(LOG_FEATURE_ENERGYMETER, "TargetTempHigh set to %.1f C", g_heat_cool_high);
-	HAL_FlashVars_SaveChannel(TCL_FLASH_CH_HEAT_COOL_HIGH, (int)(g_heat_cool_high * 2.0f));
+	HAL_FlashVars_SaveChannel(TCL_FLASH_CH_HEAT_COOL_HIGH, (int)(g_heat_cool_high * 2.0f) + 1000);
 	if (g_heat_cool_mode) {
 		TCL_ApplyHeatCoolLogic();
 	}
@@ -919,18 +919,20 @@ void TCL_Init(void) {
 	UART_InitReceiveRingBuffer(TCL_UART_RECEIVE_BUFFER_SIZE);
 
 	// Restore heat_cool state from flash (survives hardware watchdog reboots)
+	// Magic sentinel: values stored as (temp*2) + 1000 to distinguish from
+	// uninitialized flash (which may contain arbitrary data in the valid temp range).
 	{
 		int stored_low = HAL_FlashVars_GetChannelValue(TCL_FLASH_CH_HEAT_COOL_LOW);
 		int stored_high = HAL_FlashVars_GetChannelValue(TCL_FLASH_CH_HEAT_COOL_HIGH);
 		int stored_mode = HAL_FlashVars_GetChannelValue(TCL_FLASH_CH_HEAT_COOL_MODE);
-		// Values stored as temp*2 (to preserve 0.5 step). 0 = never written.
-		if (stored_low >= 30 && stored_low <= 60) {  // 15.0-30.0 °C range
-			g_heat_cool_low = (float)stored_low / 2.0f;
+		// Valid sentinel range: 1030-1060 (15.0-30.0 °C * 2 + 1000)
+		if (stored_low >= 1030 && stored_low <= 1060) {
+			g_heat_cool_low = (float)(stored_low - 1000) / 2.0f;
 		}
-		if (stored_high >= 30 && stored_high <= 60) {
-			g_heat_cool_high = (float)stored_high / 2.0f;
+		if (stored_high >= 1030 && stored_high <= 1060) {
+			g_heat_cool_high = (float)(stored_high - 1000) / 2.0f;
 		}
-		if (stored_mode == 1) {
+		if (stored_mode == 1001) {  // sentinel: 1001 = true, anything else = false
 			g_heat_cool_mode = true;
 		}
 		addLogAdv(LOG_INFO, LOG_FEATURE_ENERGYMETER,
