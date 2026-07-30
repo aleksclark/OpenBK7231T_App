@@ -10,6 +10,7 @@
 #include "../cmnds/cmd_public.h"
 #include "../mqtt/new_mqtt.h"
 #include "../httpserver/new_http.h"
+#include "../hal/hal_flashVars.h"
 #include "drv_uart.h"
 
 #define TCL_UART_PACKET_LEN 1
@@ -33,11 +34,12 @@ uint8_t g_heat_cool_last_action = 0;  // 0x01=cool, 0x04=heat, 0x02=idle(fan)
 float g_heat_cool_low = 18.0f;   // heat-to target (°C)
 float g_heat_cool_high = 25.0f;  // cool-to target (°C)
 
-// Publish throttle: only publish when values change or every N seconds.
-// This prevents the MQTT stack from being overwhelmed with 10 publishes/sec
-// on the resource-constrained RTL87x0C, which causes watchdog resets.
-#define TCL_FORCE_PUBLISH_INTERVAL 10
-static int tcl_publish_countdown = 0;
+// Staggered publish: instead of publishing all values at once (which overflows
+// the RTL87x0C lwIP TCP send buffer causing ERR_MEM -> forced reconnect every ~5min),
+// we publish ONE value per second in rotation. Each value still updates every 10s.
+// Change-based publishes still fire immediately for responsiveness.
+#define TCL_PUBLISH_SLOT_COUNT 10
+static int tcl_publish_slot = 0;  // current rotation slot (0..9)
 static int tcl_prev_current_temp = -999;
 static int tcl_prev_target_low = -999;
 static int tcl_prev_target_high = -999;
@@ -48,6 +50,11 @@ static int tcl_prev_disp = -1;
 static int tcl_prev_swingH = -1;
 static int tcl_prev_swingV = -1;
 static const char* tcl_prev_action = "";
+
+// Flash persistence channels for heat_cool state (survives reboots)
+#define TCL_FLASH_CH_HEAT_COOL_LOW   10
+#define TCL_FLASH_CH_HEAT_COOL_HIGH  11
+#define TCL_FLASH_CH_HEAT_COOL_MODE  12
 
 typedef enum {
 	CLIMATE_MODE_OFF,
@@ -340,6 +347,7 @@ void OBK_SetClimate(climateMode_e climate_mode)
 
 	if (climate_mode == CLIMATE_MODE_OFF) {
 		g_heat_cool_mode = false;
+		HAL_FlashVars_SaveChannel(TCL_FLASH_CH_HEAT_COOL_MODE, 0);
 		get_cmd_resp_t get_cmd_resp = { 0 };
 		memcpy(get_cmd_resp.raw, m_get_cmd_resp.raw, sizeof(get_cmd_resp.raw));
 		get_cmd_resp.data.power = 0x00;
@@ -350,6 +358,7 @@ void OBK_SetClimate(climateMode_e climate_mode)
 
 	if (climate_mode == CLIMATE_MODE_FAN_ONLY) {
 		g_heat_cool_mode = false;
+		HAL_FlashVars_SaveChannel(TCL_FLASH_CH_HEAT_COOL_MODE, 0);
 		get_cmd_resp_t get_cmd_resp = { 0 };
 		memcpy(get_cmd_resp.raw, m_get_cmd_resp.raw, sizeof(get_cmd_resp.raw));
 		get_cmd_resp.data.power = 0x01;
@@ -361,6 +370,7 @@ void OBK_SetClimate(climateMode_e climate_mode)
 
 	// Everything else (including heat_cool) enters dual-setpoint mode
 	g_heat_cool_mode = true;
+	HAL_FlashVars_SaveChannel(TCL_FLASH_CH_HEAT_COOL_MODE, 1);
 	g_mode = CLIMATE_MODE_HEAT_COOL;
 	TCL_ApplyHeatCoolLogic();
 }
@@ -849,6 +859,7 @@ static commandResult_t CMD_TargetTempLow(const void* context, const char* cmd, c
 	if (val > 45.0f) val = (val - 32.0f) * 5.0f / 9.0f;
 	g_heat_cool_low = val;
 	ADDLOG_WARN(LOG_FEATURE_ENERGYMETER, "TargetTempLow set to %.1f C", g_heat_cool_low);
+	HAL_FlashVars_SaveChannel(TCL_FLASH_CH_HEAT_COOL_LOW, (int)(g_heat_cool_low * 2.0f));
 	if (g_heat_cool_mode) {
 		TCL_ApplyHeatCoolLogic();
 	}
@@ -860,6 +871,7 @@ static commandResult_t CMD_TargetTempHigh(const void* context, const char* cmd, 
 	if (val > 45.0f) val = (val - 32.0f) * 5.0f / 9.0f;
 	g_heat_cool_high = val;
 	ADDLOG_WARN(LOG_FEATURE_ENERGYMETER, "TargetTempHigh set to %.1f C", g_heat_cool_high);
+	HAL_FlashVars_SaveChannel(TCL_FLASH_CH_HEAT_COOL_HIGH, (int)(g_heat_cool_high * 2.0f));
 	if (g_heat_cool_mode) {
 		TCL_ApplyHeatCoolLogic();
 	}
@@ -905,6 +917,26 @@ void TCL_Init(void) {
 
 	UART_InitUART(TCL_baudRate, 2, false);
 	UART_InitReceiveRingBuffer(TCL_UART_RECEIVE_BUFFER_SIZE);
+
+	// Restore heat_cool state from flash (survives hardware watchdog reboots)
+	{
+		int stored_low = HAL_FlashVars_GetChannelValue(TCL_FLASH_CH_HEAT_COOL_LOW);
+		int stored_high = HAL_FlashVars_GetChannelValue(TCL_FLASH_CH_HEAT_COOL_HIGH);
+		int stored_mode = HAL_FlashVars_GetChannelValue(TCL_FLASH_CH_HEAT_COOL_MODE);
+		// Values stored as temp*2 (to preserve 0.5 step). 0 = never written.
+		if (stored_low >= 30 && stored_low <= 60) {  // 15.0-30.0 °C range
+			g_heat_cool_low = (float)stored_low / 2.0f;
+		}
+		if (stored_high >= 30 && stored_high <= 60) {
+			g_heat_cool_high = (float)stored_high / 2.0f;
+		}
+		if (stored_mode == 1) {
+			g_heat_cool_mode = true;
+		}
+		addLogAdv(LOG_INFO, LOG_FEATURE_ENERGYMETER,
+			"TCL: restored heat_cool from flash: low=%.1f high=%.1f mode=%d",
+			g_heat_cool_low, g_heat_cool_high, (int)g_heat_cool_mode);
+	}
 
 	//cmddetail:{"name":"ACMode","args":"[Mode]",
 	//cmddetail:"descr":"Sets the climate mode (off, cool, dry, fan_only, heat, heatcool, auto)",
@@ -995,57 +1027,56 @@ static const char* TCL_ComputeAction(void) {
 void TCL_UART_RunEverySecond(void) {
 	uint8_t req_cmd[] = { 0xBB, 0x00, 0x01, 0x04, 0x02, 0x01, 0x00, 0xBD };
 
-	// Publish only on value change, or every TCL_FORCE_PUBLISH_INTERVAL seconds.
-	// Reduces MQTT load from ~10 pub/sec to near-zero in steady state,
-	// preventing watchdog resets on RTL87x0C.
-	bool force = (--tcl_publish_countdown <= 0);
-	if (force)
-		tcl_publish_countdown = TCL_FORCE_PUBLISH_INTERVAL;
+	// Staggered publish: one slot per second, rotating through 10 values.
+	// Immediate publish on change for responsiveness.
+	// This prevents lwIP ERR_MEM from accumulating (which caused reconnects every ~5 min).
+	int slot = tcl_publish_slot;
+	tcl_publish_slot = (tcl_publish_slot + 1) % TCL_PUBLISH_SLOT_COUNT;
 
 	int cur_temp = (int)current_temperature;
 	int cur_low = (int)g_heat_cool_low;
 	int cur_high = (int)g_heat_cool_high;
 
-	if (force || cur_temp != tcl_prev_current_temp) {
+	if (slot == 0 || cur_temp != tcl_prev_current_temp) {
 		MQTT_PublishMain_StringInt("CurrentTemperature", cur_temp, 0);
 		tcl_prev_current_temp = cur_temp;
 	}
-	if (force || cur_low != tcl_prev_target_low) {
+	if (slot == 1 || cur_low != tcl_prev_target_low) {
 		MQTT_PublishMain_StringInt("TargetTempLow", cur_low, 0);
 		tcl_prev_target_low = cur_low;
 	}
-	if (force || cur_high != tcl_prev_target_high) {
+	if (slot == 2 || cur_high != tcl_prev_target_high) {
 		MQTT_PublishMain_StringInt("TargetTempHigh", cur_high, 0);
 		tcl_prev_target_high = cur_high;
 	}
-	if (force || g_mode != tcl_prev_mode) {
+	if (slot == 3 || g_mode != tcl_prev_mode) {
 		MQTT_PublishMain_StringString("ACMode", climateModeToStr(g_mode), 0);
 		tcl_prev_mode = g_mode;
 	}
-	if (force || g_fanMode != tcl_prev_fan) {
+	if (slot == 4 || g_fanMode != tcl_prev_fan) {
 		MQTT_PublishMain_StringString("FANMode", fanModeToStr(g_fanMode), 0);
 		tcl_prev_fan = g_fanMode;
 	}
-	if (force || g_buzzer != tcl_prev_buzzer) {
+	if (slot == 5 || g_buzzer != tcl_prev_buzzer) {
 		MQTT_PublishMain_StringInt("Buzzer", g_buzzer, 0);
 		tcl_prev_buzzer = g_buzzer;
 	}
-	if (force || g_disp != tcl_prev_disp) {
+	if (slot == 6 || g_disp != tcl_prev_disp) {
 		MQTT_PublishMain_StringInt("Display", g_disp, 0);
 		tcl_prev_disp = g_disp;
 	}
-	if (force || g_swingH != tcl_prev_swingH) {
+	if (slot == 7 || g_swingH != tcl_prev_swingH) {
 		MQTT_PublishMain_StringString("SwingH", getSwingHLabel(g_swingH), 0);
 		tcl_prev_swingH = g_swingH;
 	}
-	if (force || g_swingV != tcl_prev_swingV) {
+	if (slot == 8 || g_swingV != tcl_prev_swingV) {
 		MQTT_PublishMain_StringString("SwingV", getSwingVLabel(g_swingV), 0);
 		tcl_prev_swingV = g_swingV;
 	}
 
 	// HVAC action (what the unit is actually doing)
 	const char* cur_action = TCL_ComputeAction();
-	if (force || cur_action != tcl_prev_action) {
+	if (slot == 9 || cur_action != tcl_prev_action) {
 		MQTT_PublishMain_StringString("HVACAction", cur_action, 0);
 		tcl_prev_action = cur_action;
 	}
